@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "bin": {
-    "zeropse": "./index.js"
+    "zeropse-cli": "./index.js"
   },
   "type": "module",
   "keywords": [
