@@ -1,2 +1,5 @@
 node_modules
 pnpm-lock.yaml
+.DS_Store
+.vscode
+.env
