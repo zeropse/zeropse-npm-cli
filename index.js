@@ -1,161 +1,206 @@
 #!/usr/bin/env node
 
-import prompts from "prompts";
-import { execSync } from "child_process";
+import inquirer from "inquirer";
 import chalk from "chalk";
-import fs from "fs-extra";
+import fs from "fs/promises";
 import path from "path";
+import { execSync } from "child_process";
 import { fileURLToPath } from "url";
-import ora from "ora";
 
-const CONFIG = {
-  templates: {
-    vite: "template-vite",
-    viteTailwind: "template-vite-tailwind",
-  },
-  commands: {
-    createVite: (name) => `npm create vite@latest ${name} -- --template react`,
-    createNext: (name) => `npx create-next-app@latest ${name}`,
-    installTailwind: "npm install tailwindcss @tailwindcss/vite",
-  },
-};
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const prompt = inquirer.createPromptModule();
 
-class ProjectGenerator {
-  constructor() {
-    this.spinner = ora();
-    this.dirname = path.dirname(fileURLToPath(import.meta.url));
+// Execute shell commands safely
+function runCommand(command, options = {}) {
+  try {
+    execSync(command, { stdio: "inherit", ...options });
+  } catch (error) {
+    console.error(`❌ Error executing command: ${command}`);
+    console.error(error.message);
+    return false;
   }
+  return true;
+}
 
-  checkDependencies() {
-    try {
-      execSync("npm --version", { stdio: "ignore" });
-    } catch {
-      throw new Error(
-        "❌ npm is required but not installed. Please install npm first."
-      );
-    }
-  }
+// Remove unnecessary files safely
+async function removeUnnecessaryFiles(projectName) {
+  const pathsToRemove = [
+    "public",
+    "README.md",
+    "src/assets",
+    "src/App.css",
+    "src/index.css",
+  ].map((file) => path.join(projectName, file));
 
-  async getProjectConfig() {
-    console.log(chalk.cyan("\n📦 Project Configuration\n"));
-
-    const response = await prompts([
-      {
-        type: "select",
-        name: "framework",
-        message: "Choose a framework:",
-        choices: [
-          { title: "Vite + React", value: "vite" },
-          { title: "Next.js", value: "next" },
-        ],
-      },
-      {
-        type: (prev) => (prev === "vite" ? "toggle" : null),
-        name: "tailwind",
-        message: "Install Tailwind CSS?",
-        initial: true,
-        active: "Yes",
-        inactive: "No",
-      },
-      {
-        type: "text",
-        name: "projectName",
-        message: "Project name:",
-        validate: this.validateProjectName,
-      },
-    ]);
-
-    if (!response.framework || !response.projectName) {
-      throw new Error("Operation cancelled");
-    }
-
-    return response;
-  }
-
-  validateProjectName(name) {
-    if (!name) return "❌ Project name required";
-    if (fs.existsSync(name)) return "❌ Directory already exists";
-    if (!/^[a-z0-9-_]+$/i.test(name))
-      return "❌ Only letters, numbers, hyphens & underscores allowed";
-    return true;
-  }
-
-  async copyTemplateFiles(projectPath, useTailwind) {
-    this.spinner.start("📝 Adding files...");
-    const templateDir = useTailwind
-      ? CONFIG.templates.viteTailwind
-      : CONFIG.templates.vite;
-    const templatePath = path.join(this.dirname, templateDir);
-
-    if (!fs.existsSync(templatePath)) {
-      throw new Error(`❌ ${templateDir} directory not found!`);
-    }
-
-    await this.cleanDirectory(projectPath);
-    await fs.copy(templatePath, projectPath, {
-      filter: (src) => !src.includes("node_modules"),
-    });
-    this.spinner.succeed("Files added successfully");
-  }
-
-  async cleanDirectory(projectPath) {
-    const files = await fs.readdir(projectPath);
-    for (const file of files) {
-      if (file !== "package.json" && file !== "node_modules") {
-        await fs.remove(path.join(projectPath, file));
+  await Promise.allSettled(
+    pathsToRemove.map(async (filePath) => {
+      try {
+        await fs.rm(filePath, { recursive: true, force: true });
+      } catch {
+        console.warn(`⚠️ Could not remove ${filePath}`);
       }
-    }
-  }
+    })
+  );
+}
 
-  async createViteProject(projectPath, useTailwind) {
-    this.spinner.start("🚀 Creating Vite project...");
-    await execSync(CONFIG.commands.createVite(path.basename(projectPath)), {
-      stdio: "inherit",
-    });
-    this.spinner.succeed("Vite project created");
-
-    process.chdir(projectPath);
-
-    if (useTailwind) {
-      this.spinner.start("🎨 Installing Tailwind CSS...");
-      await execSync(CONFIG.commands.installTailwind, { stdio: "inherit" });
-      this.spinner.succeed("Tailwind CSS installed");
-    }
-
-    await this.copyTemplateFiles(projectPath, useTailwind);
-  }
-
-  async createNextProject(projectPath) {
-    this.spinner.start("🚀 Creating Next.js project...");
-    await execSync(CONFIG.commands.createNext(path.basename(projectPath)), {
-      stdio: "inherit",
-    });
-    this.spinner.succeed("Next.js project created");
-
-    console.log(chalk.green("\n🎉 Setup complete! Next steps:"));
-    console.log(chalk.cyan("\n1. Navigate to your project:"));
-    console.log(chalk.blue(`   cd ${path.basename(projectPath)}`));
-    console.log(chalk.cyan("\n2. Start development server:"));
-    console.log(chalk.blue("   npm run dev"));
-  }
-
-  async generate() {
-    try {
-      this.checkDependencies();
-      const config = await this.getProjectConfig();
-      const projectPath = path.resolve(process.cwd(), config.projectName);
-
-      if (config.framework === "vite") {
-        await this.createViteProject(projectPath, config.tailwind);
-      } else {
-        await this.createNextProject(projectPath);
-      }
-    } catch (error) {
-      this.spinner.fail();
-      console.error(chalk.red(`\n❌ Error: ${error.message}`));
-      process.exit(1);
-    }
+// Copy template files safely
+async function copyFileFromTemplate(templatePath, targetPath) {
+  try {
+    await fs.copyFile(templatePath, targetPath);
+  } catch {
+    console.warn(`⚠️ Missing template file: ${path.basename(templatePath)}`);
   }
 }
 
-new ProjectGenerator().generate();
+async function installVite(projectName, useTS) {
+  console.log(
+    `🚀 Creating a Vite project: ${projectName} (${
+      useTS ? "TypeScript" : "JavaScript"
+    })...`
+  );
+
+  if (
+    !runCommand(
+      `npm create vite@latest ${projectName} -- --template ${
+        useTS ? "react-ts" : "react"
+      }`
+    )
+  ) {
+    return process.exit(1);
+  }
+
+  console.log("📦 Installing dependencies...");
+  if (!runCommand("npm install", { cwd: projectName })) {
+    return process.exit(1);
+  }
+
+  await removeUnnecessaryFiles(projectName);
+
+  if (!useTS) {
+    await setupViteFiles(projectName);
+  }
+}
+
+async function setupViteFiles(projectName) {
+  const stylesDir = path.join(projectName, "src/style");
+  await fs.mkdir(stylesDir, { recursive: true });
+
+  const templateFiles = [
+    { src: "bin/files/gitignore.txt", dest: ".gitignore" },
+    { src: "bin/files/vite/index.txt", dest: "index.html" },
+    { src: "bin/files/vite/app.txt", dest: "src/App.jsx" },
+    { src: "bin/files/vite/main.txt", dest: "src/main.jsx" },
+    { src: "bin/files/vite/style.txt", dest: "src/style/index.css" },
+  ];
+
+  await Promise.all(
+    templateFiles.map(({ src, dest }) =>
+      copyFileFromTemplate(
+        path.join(__dirname, src),
+        path.join(projectName, dest)
+      )
+    )
+  );
+}
+
+async function installNext(projectName) {
+  console.log(`🚀 Creating a Next.js project: ${projectName}...`);
+
+  if (!runCommand(`npx create-next-app@latest ${projectName}`)) {
+    return process.exit(1);
+  }
+
+  await removeUnnecessaryFiles(projectName);
+}
+
+async function installTailwind(projectName, useTS) {
+  console.log("🎨 Installing Tailwind CSS...");
+
+  if (
+    !runCommand("npm install tailwindcss @tailwindcss/vite", {
+      cwd: projectName,
+    })
+  ) {
+    return process.exit(1);
+  }
+
+  await setupTailwindFiles(projectName, useTS);
+
+  console.log("✅ Tailwind CSS setup complete!");
+}
+
+async function setupTailwindFiles(projectName, useTS) {
+  const stylesDir = path.join(projectName, "src/style");
+  await fs.mkdir(stylesDir, { recursive: true });
+
+  const templateFiles = [
+    { src: "bin/files/tailwind/vite.config.txt", dest: "vite.config.js" },
+    { src: "bin/files/tailwind/css.txt", dest: "src/style/index.css" },
+    { src: "bin/files/tailwind/indextailwind.txt", dest: "index.html" },
+    { src: "bin/files/tailwind/app.txt", dest: "src/App.jsx" },
+    { src: "bin/files/tailwind/main.txt", dest: "src/main.jsx" },
+  ];
+
+  await Promise.all(
+    templateFiles.map(({ src, dest }) =>
+      copyFileFromTemplate(
+        path.join(__dirname, src),
+        path.join(projectName, dest)
+      )
+    )
+  );
+}
+
+async function main() {
+  console.log(chalk.cyan("\n📦 Project Configuration\n"));
+  try {
+    const { framework } = await prompt([
+      {
+        type: "list",
+        name: "framework",
+        message: "Choose your framework:",
+        choices: ["React (Vite)", "NextJS"],
+      },
+    ]);
+
+    const { projectName } = await prompt([
+      {
+        type: "input",
+        name: "projectName",
+        message: "Enter the name of your project:",
+        default: "my-project",
+      },
+    ]);
+
+    if (framework === "React (Vite)") {
+      const { useTS, useTailwind } = await prompt([
+        {
+          type: "confirm",
+          name: "useTS",
+          message: "Do you want to use TypeScript?",
+          default: false,
+        },
+        {
+          type: "confirm",
+          name: "useTailwind",
+          message: "Do you want to use Tailwind CSS?",
+          default: true,
+        },
+      ]);
+
+      await installVite(projectName, useTS);
+
+      if (useTailwind) {
+        await installTailwind(projectName, useTS);
+      }
+    } else {
+      await installNext(projectName);
+    }
+
+    console.log("✅ Project setup complete! Happy coding! 🎉");
+  } catch (error) {
+    console.error("❌ An error occurred:", error.message);
+  }
+}
+
+main();
