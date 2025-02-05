@@ -17,12 +17,17 @@
     "next.js"
   ],
   "author": "zeropse",
-  "license": "ISC",
+  "license": "MIT",
   "description": "A CLI tool to create a new project with Vite and React or Next.js",
   "dependencies": {
     "chalk": "^5.4.1",
     "fs-extra": "^11.3.0",
     "ora": "^8.2.0",
     "prompts": "^2.4.2"
-  }
+  },
+  "files": [
+    "index.js",
+    "template-vite",
+    "template-vite-tailwind"
+  ]
 }
