@@ -47,7 +47,3 @@ Feel free to open issues and pull requests on the [GitHub repository](https://gi
 ## License
 
 This project is licensed under the MIT License.
-
----
-
-Made with ❤️ by [Zeropse](https://zeropse.xyz)
