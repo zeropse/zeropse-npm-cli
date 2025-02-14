@@ -42,8 +42,12 @@ You will be prompted to choose between React (Vite) and Next.js, and optionally 
 
 ## Contributing
 
-Feel free to open issues and pull requests on the [GitHub repository](https://github.com/your-repo/zeropse-cli).
+Feel free to open issues and pull requests on the [GitHub repository](https://github.com/zeropse/zeropse-cli).
 
 ## License
 
 This project is licensed under the MIT License.
+
+---
+
+Made with ❤️ by [Zeropse](https://zeropse.xyz)
