@@ -1,5 +1,3 @@
-# Zeropse CLI
-
 ![Zeropse CLI](https://img.shields.io/npm/v/zeropse-cli?style=flat-square)
 ![License](https://img.shields.io/npm/l/zeropse-cli?style=flat-square)
 
